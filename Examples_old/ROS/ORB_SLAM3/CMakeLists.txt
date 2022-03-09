@@ -68,16 +68,16 @@ target_link_libraries(Mono
 ${LIBS}
 )
 
-# Node for monocular camera (Augmented Reality Demo)
-rosbuild_add_executable(MonoAR
-src/AR/ros_mono_ar.cc
-src/AR/ViewerAR.h
-src/AR/ViewerAR.cc
-)
+# # Node for monocular camera (Augmented Reality Demo)
+# rosbuild_add_executable(MonoAR
+# src/AR/ros_mono_ar.cc
+# src/AR/ViewerAR.h
+# src/AR/ViewerAR.cc
+# )
 
-target_link_libraries(MonoAR
-${LIBS}
-)
+# target_link_libraries(MonoAR
+# ${LIBS}
+# )
 
 # Node for stereo camera
 rosbuild_add_executable(Stereo
@@ -112,5 +112,14 @@ src/ros_stereo_inertial.cc
 )
 
 target_link_libraries(Stereo_Inertial
+${LIBS}
+)
+
+# Node for rgbd-inertial camera
+rosbuild_add_executable(RGBD_Inertial
+src/ros_rgbd_inertial.cc
+)
+
+target_link_libraries(RGBD_Inertial
 ${LIBS}
 )
