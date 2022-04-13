@@ -538,6 +538,14 @@ void Tracking::newParameterLoader(Settings *settings) {
 
     if(settings->needToUndistort()){
         mDistCoef = settings->camera1DistortionCoef();
+        
+        if(mSensor == System::FisheyeD) {
+            mDistCoef = cv::Mat(4, 1, CV_32F);
+            mDistCoef.at<float>(0, 0) = settings->camera1()->getParameter(4);
+            mDistCoef.at<float>(1, 0) = settings->camera1()->getParameter(5);
+            mDistCoef.at<float>(2, 0) = settings->camera1()->getParameter(6);
+            mDistCoef.at<float>(3, 0) = settings->camera1()->getParameter(7);
+        }
     }
     else{
         mDistCoef = cv::Mat::zeros(4,1,CV_32F);
@@ -558,7 +566,7 @@ void Tracking::newParameterLoader(Settings *settings) {
     mK_(0,2) = mpCamera->getParameter(2);
     mK_(1,2) = mpCamera->getParameter(3);
 
-    if((mSensor==System::STEREO || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD) &&
+    if((mSensor==System::STEREO || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD || mSensor == System::FisheyeD) &&
         settings->cameraType() == Settings::KannalaBrandt){
         mpCamera2 = settings->camera2();
         mpCamera2 = mpAtlas->AddCamera(mpCamera2);
@@ -568,12 +576,16 @@ void Tracking::newParameterLoader(Settings *settings) {
         mpFrameDrawer->both = true;
     }
 
-    if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD ){
+    if(mSensor == System::FisheyeD) {
+        mpFrameDrawer->both = false;
+    }
+
+    if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD || mSensor == System::FisheyeD){
         mbf = settings->bf();
         mThDepth = settings->b() * settings->thDepth();
     }
 
-    if(mSensor==System::RGBD || mSensor==System::IMU_RGBD){
+    if(mSensor==System::RGBD || mSensor==System::IMU_RGBD || mSensor == System::FisheyeD){
         mDepthMapFactor = settings->depthMapFactor();
         if(fabs(mDepthMapFactor)<1e-5)
             mDepthMapFactor=1;
@@ -1537,6 +1549,7 @@ Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, co
             cvtColor(mImGray,mImGray,cv::COLOR_BGRA2GRAY);
     }
 
+
     if((fabs(mDepthMapFactor-1.0f)>1e-5) || imDepth.type()!=CV_32F)
         imDepth.convertTo(imDepth,CV_32F,mDepthMapFactor);
 
@@ -1544,6 +1557,9 @@ Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, co
         mCurrentFrame = Frame(mImGray,imDepth,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera);
     else if(mSensor == System::IMU_RGBD)
         mCurrentFrame = Frame(mImGray,imDepth,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,&mLastFrame,*mpImuCalib);
+    else if (mSensor == System::FisheyeD) {
+        mCurrentFrame = Frame(mImGray,imDepth,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera, mpCamera2);
+    }
 
 
 
@@ -1814,6 +1830,8 @@ void Tracking::Track()
     {
         cout << "ERROR: There is not an active map in the atlas" << endl;
     }
+    
+    std::cout << __FUNCTION__ << " ===============================================" << std::endl;
 
     if(mState!=NO_IMAGES_YET)
     {
@@ -1854,7 +1872,7 @@ void Tracking::Track()
 
         }
     }
-
+    
 
     if ((mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD) && mpLastKeyFrame)
         mCurrentFrame.SetNewBias(mpLastKeyFrame->GetImuBias());
@@ -1865,7 +1883,7 @@ void Tracking::Track()
     }
 
     mLastProcessedState=mState;
-
+    
     if ((mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD) && !mbCreatedMap)
     {
 #ifdef REGISTER_TIMES
@@ -1881,12 +1899,12 @@ void Tracking::Track()
 
     }
     mbCreatedMap = false;
-
+    
     // Get Map Mutex -> Map cannot be changed
     unique_lock<mutex> lock(pCurrentMap->mMutexMapUpdate);
 
     mbMapUpdated = false;
-
+    
     int nCurMapChangeIndex = pCurrentMap->GetMapChangeIndex();
     int nMapChangeIndex = pCurrentMap->GetLastMapChange();
     if(nCurMapChangeIndex>nMapChangeIndex)
@@ -1898,7 +1916,7 @@ void Tracking::Track()
 
     if(mState==NOT_INITIALIZED)
     {
-        if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD)
+        if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD || mSensor == System::FisheyeD)
         {
             StereoInitialization();
         }
@@ -1932,12 +1950,14 @@ void Tracking::Track()
         // Initial camera pose estimation using motion model or relocalization (if tracking is lost)
         if(!mbOnlyTracking)
         {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << ": mbOnlyTracking false" << std::endl;
 
             // State OK
             // Local Mapping is activated. This is the normal behaviour, unless
             // you explicitly activate the "only tracking" mode.
             if(mState==OK)
             {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
 
                 // Local Mapping might have changed some MapPoints tracked in last frame
                 CheckReplacedInLastFrame();
@@ -1955,6 +1975,7 @@ void Tracking::Track()
                         bOK = TrackReferenceKeyFrame();
                 }
 
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
 
                 if (!bOK)
                 {
@@ -1965,7 +1986,7 @@ void Tracking::Track()
                     }
                     else if(pCurrentMap->KeyFramesInMap()>10)
                     {
-                        // cout << "KF in map: " << pCurrentMap->KeyFramesInMap() << endl;
+                        cout << "KF in map: " << pCurrentMap->KeyFramesInMap() << endl;
                         mState = RECENTLY_LOST;
                         mTimeStampLost = mCurrentFrame.mTimeStamp;
                     }
@@ -2035,17 +2056,21 @@ void Tracking::Track()
         }
         else
         {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << ": mbOnlyTracking true" << std::endl;
             // Localization Mode: Local Mapping is deactivated (TODO Not available in inertial mode)
             if(mState==LOST)
             {
                 if(mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
                     Verbose::PrintMess("IMU. State LOST", Verbose::VERBOSITY_NORMAL);
                 bOK = Relocalization();
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
             }
             else
             {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << ": " << std::endl;
                 if(!mbVO)
                 {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << ": bVO false" << std::endl;
                     // In last frame we tracked enough MapPoints in the map
                     if(mbVelocity)
                     {
@@ -2058,6 +2083,7 @@ void Tracking::Track()
                 }
                 else
                 {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << ": bVO true" << std::endl;
                     // In last frame we tracked mainly "visual odometry" points.
 
                     // We compute two camera poses, one from motion model and one doing relocalization.
@@ -2122,6 +2148,7 @@ void Tracking::Track()
         // If we have an initial estimation of the camera pose and matching. Track the local map.
         if(!mbOnlyTracking)
         {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
             if(bOK)
             {
                 bOK = TrackLocalMap();
@@ -2143,6 +2170,7 @@ void Tracking::Track()
             mState = OK;
         else if (mState == OK)
         {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
             if (mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
             {
                 Verbose::PrintMess("Track lost for less than one second...", Verbose::VERBOSITY_NORMAL);
@@ -2162,6 +2190,7 @@ void Tracking::Track()
                 mTimeStampLost = mCurrentFrame.mTimeStamp;
             //}
         }
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
 
         // Save frame if recent relocalization, since they are used for IMU reset (as we are making copy, it shluld be once mCurrFrame is completely modified)
         if((mCurrentFrame.mnId<(mnLastRelocFrameId+mnFramesToResetIMU)) && (mCurrentFrame.mnId > mnFramesToResetIMU) &&
@@ -2204,14 +2233,17 @@ void Tracking::Track()
 
         if(bOK || mState==RECENTLY_LOST)
         {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
             // Update motion model
             if(mLastFrame.isSet() && mCurrentFrame.isSet())
             {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
                 Sophus::SE3f LastTwc = mLastFrame.GetPose().inverse();
                 mVelocity = mCurrentFrame.GetPose() * LastTwc;
                 mbVelocity = true;
             }
             else {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
                 mbVelocity = false;
             }
 
@@ -2266,10 +2298,12 @@ void Tracking::Track()
                     mCurrentFrame.mvpMapPoints[i]=static_cast<MapPoint*>(NULL);
             }
         }
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
 
         // Reset if the camera get lost soon after initialization
         if(mState==LOST)
         {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
             if(pCurrentMap->KeyFramesInMap()<=10)
             {
                 mpSystem->ResetActiveMap();
@@ -2288,6 +2322,8 @@ void Tracking::Track()
             return;
         }
 
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
+
         if(!mCurrentFrame.mpReferenceKF)
             mCurrentFrame.mpReferenceKF = mpReferenceKF;
 
@@ -2299,6 +2335,8 @@ void Tracking::Track()
 
     if(mState==OK || mState==RECENTLY_LOST)
     {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
+
         // Store frame pose information to retrieve the complete camera trajectory afterwards.
         if(mCurrentFrame.isSet())
         {
@@ -2376,7 +2414,10 @@ void Tracking::StereoInitialization()
         mpAtlas->AddKeyFrame(pKFini);
 
         // Create MapPoints and asscoiate to KeyFrame
-        if(!mpCamera2){
+        if(!mpCamera2 || mSensor==System::FisheyeD){
+    
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
+
             for(int i=0; i<mCurrentFrame.N;i++)
             {
                 float z = mCurrentFrame.mvDepth[i];
@@ -2853,6 +2894,8 @@ void Tracking::UpdateLastFrame()
 
 bool Tracking::TrackWithMotionModel()
 {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
+
     ORBmatcher matcher(0.9,true);
 
     // Update last frame pose according to its reference keyframe
@@ -2948,6 +2991,7 @@ bool Tracking::TrackWithMotionModel()
 
 bool Tracking::TrackLocalMap()
 {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
 
     // We have an estimation of the camera pose and some map points tracked in the frame.
     // We retrieve the local map and try to find matches to points in the local map.
@@ -2955,6 +2999,8 @@ bool Tracking::TrackLocalMap()
 
     UpdateLocalMap();
     SearchLocalPoints();
+
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
 
     // TOO check outliers before PO
     int aux1 = 0, aux2=0;
@@ -2965,6 +3011,8 @@ bool Tracking::TrackLocalMap()
             if(mCurrentFrame.mvbOutlier[i])
                 aux2++;
         }
+    
+    std::cout << __FUNCTION__ << ", " << __LINE__ << ": aux1 " << aux1 << ", aux2 " << aux2 << std::endl;
 
     int inliers;
     if (!mpAtlas->isImuInitialized())
@@ -2991,6 +3039,8 @@ bool Tracking::TrackLocalMap()
             }
         }
     }
+
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
 
     aux1 = 0, aux2 = 0;
     for(int i=0; i<mCurrentFrame.N; i++)
@@ -3024,6 +3074,8 @@ bool Tracking::TrackLocalMap()
         }
     }
 
+    std::cout << __FUNCTION__ << ", " << __LINE__ << ": inliners " << mnMatchesInliers << std::endl;
+
     // Decide if the tracking was succesful
     // More restrictive if there was a relocalization recently
     mpLocalMapper->mnMatchesInliers=mnMatchesInliers;
@@ -3034,6 +3086,8 @@ bool Tracking::TrackLocalMap()
         return true;
 
 
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
+
     if (mSensor == System::IMU_MONOCULAR)
     {
         if((mnMatchesInliers<15 && mpAtlas->isImuInitialized())||(mnMatchesInliers<50 && !mpAtlas->isImuInitialized()))
@@ -3043,14 +3097,16 @@ bool Tracking::TrackLocalMap()
         else
             return true;
     }
-    else if (mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
+    else if (mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD || mSensor == System::FisheyeD)
     {
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
         if(mnMatchesInliers<15)
         {
             return false;
         }
         else
             return true;
+    std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
     }
     else
     {

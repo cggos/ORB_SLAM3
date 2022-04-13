@@ -31,3 +31,8 @@ rosbag play cafe1-1.bag /d400/color/image_raw:=/camera/rgb/image_raw /d400/align
 rosrun ORB_SLAM3 RGBD_Inertial Vocabulary/ORBvoc.txt Examples_old/RGB-D-Inertial/OpenLORIS_Scene.yaml
 
 rosbag play cafe1-1.bag /d400/color/image_raw:=/camera/rgb/image_raw /d400/aligned_depth_to_color/image_raw:=/camera/depth_registered/image_raw /d400/gyro/sample:=/imu_gyr /d400/accel/sample:=/imu_acc
+
+
+# Fisheye-Depth
+
+rosrun --prefix 'gdb --args' ORB_SLAM3 FisheyeDepth Vocabulary/ORBvoc.txt Examples_old/RGB-D-Inertial/RealSense_T265_D435i.yaml

@@ -861,7 +861,7 @@ int Optimizer::PoseOptimization(Frame *pFrame)
         if(pMP)
         {
             //Conventional SLAM
-            if(!pFrame->mpCamera2){
+            if(!pFrame->mpCamera2 || pFrame->is_fisheye_d_){
                 // Monocular observation
                 if(pFrame->mvuRight[i]<0)
                 {

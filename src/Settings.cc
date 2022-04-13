@@ -145,7 +145,7 @@ namespace ORB_SLAM3 {
         cout << "\t-Loaded camera 1" << endl;
 
         //Read second camera if stereo (not rectified)
-        if(sensor_ == System::STEREO || sensor_ == System::IMU_STEREO){
+        if(sensor_ == System::STEREO || sensor_ == System::IMU_STEREO || sensor_ == System::FisheyeD){
             readCamera2(fSettings);
             cout << "\t-Loaded camera 2" << endl;
         }
@@ -159,7 +159,7 @@ namespace ORB_SLAM3 {
             cout << "\t-Loaded IMU calibration" << endl;
         }
 
-        if(sensor_ == System::RGBD || sensor_ == System::IMU_RGBD){
+        if(sensor_ == System::RGBD || sensor_ == System::IMU_RGBD || sensor_ == System::FisheyeD){
             readRGBD(fSettings);
             cout << "\t-Loaded RGB-D calibration" << endl;
         }
@@ -266,6 +266,11 @@ namespace ORB_SLAM3 {
 
                 static_cast<KannalaBrandt8*>(calibration1_)->mvLappingArea = vOverlapping;
             }
+
+            if(sensor_ == System::FisheyeD) {
+                bNeedToUndistort_ = true;
+                std::cout << "[cggos] bNeedToUndistort_ = true" << std::endl;
+            }
         }
         else{
             cerr << "Error: " << cameraModel << " not known" << endl;
@@ -276,8 +281,10 @@ namespace ORB_SLAM3 {
     void Settings::readCamera2(cv::FileStorage &fSettings) {
         bool found;
         vector<float> vCalibration;
-        if (cameraType_ == PinHole) {
+        if (cameraType_ == PinHole || sensor_ == System::FisheyeD) {
             bNeedToRectify_ = true;
+
+            if(sensor_ == System::FisheyeD) bNeedToRectify_ = false;
 
             //Read intrinsic parameters
             float fx = readParameter<float>(fSettings,"Camera2.fx",found);
@@ -530,7 +537,7 @@ namespace ORB_SLAM3 {
         output << "SLAM settings: " << endl;
 
         output << "\t-Camera 1 parameters (";
-        if(settings.cameraType_ == Settings::PinHole || settings.cameraType_ ==  Settings::Rectified){
+        if((settings.cameraType_ == Settings::PinHole && settings.sensor_ != System::FisheyeD) || settings.cameraType_ ==  Settings::Rectified){
             output << "Pinhole";
         }
         else{
@@ -550,7 +557,7 @@ namespace ORB_SLAM3 {
             output << " ]" << endl;
         }
 
-        if(settings.sensor_ == System::STEREO || settings.sensor_ == System::IMU_STEREO){
+        if(settings.sensor_ == System::STEREO || settings.sensor_ == System::IMU_STEREO || settings.sensor_ == System::FisheyeD){
             output << "\t-Camera 2 parameters (";
             if(settings.cameraType_ == Settings::PinHole || settings.cameraType_ ==  Settings::Rectified){
                 output << "Pinhole";

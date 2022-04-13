@@ -123,3 +123,12 @@ src/ros_rgbd_inertial.cc
 target_link_libraries(RGBD_Inertial
 ${LIBS}
 )
+
+# Node for Fisheye-Depth camera
+rosbuild_add_executable(FisheyeDepth
+src/ros_fisheye_depth.cc
+)
+
+target_link_libraries(FisheyeDepth
+${LIBS}
+)

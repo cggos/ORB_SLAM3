@@ -283,8 +283,209 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeSt
     monoRight = -1;
 
     AssignFeaturesToGrid();
+} 
+
+void img_draw(cv::Mat &img, const std::vector<cv::Point2f> &vpts) {
+    const float r = 5;
+    for (int i = 0; i < vpts.size(); i++) {
+        const cv::Point2f& pt = vpts[i];
+        cv::Point2f pt1, pt2;
+        pt1.x = pt.x - r;
+        pt1.y = pt.y - r;
+        pt2.x = pt.x + r;
+        pt2.y = pt.y + r;
+        cv::rectangle(img, pt1, pt2, cv::Scalar(0, 255, 0));
+        cv::circle(img, pt, 2, cv::Scalar(0, 255, 0), -1);
+    }
 }
 
+Frame::Frame(const cv::Mat &imFisheye, const cv::Mat &imDepth, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera, GeometricCamera* pCamera2, Frame* pPrevF, const IMU::Calib &ImuCalib)
+    :mpcpi(NULL),mpORBvocabulary(voc),mpORBextractorLeft(extractor),mpORBextractorRight(static_cast<ORBextractor*>(NULL)),
+     mTimeStamp(timeStamp), mK(K.clone()), mK_(Converter::toMatrix3f(K)),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
+     mImuCalib(ImuCalib), mpImuPreintegrated(NULL), mpPrevFrame(pPrevF), mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbIsSet(false), mbImuPreintegrated(false),
+     mpCamera(pCamera),mpCamera2(pCamera2), mbHasPose(false), mbHasVelocity(false)
+{
+    is_fisheye_d_ = true;
+
+    // Frame ID
+    mnId=nNextId++;
+
+    // Scale Level Info
+    mnScaleLevels = mpORBextractorLeft->GetLevels();
+    mfScaleFactor = mpORBextractorLeft->GetScaleFactor();
+    mfLogScaleFactor = log(mfScaleFactor);
+    mvScaleFactors = mpORBextractorLeft->GetScaleFactors();
+    mvInvScaleFactors = mpORBextractorLeft->GetInverseScaleFactors();
+    mvLevelSigma2 = mpORBextractorLeft->GetScaleSigmaSquares();
+    mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
+
+    // ORB extraction
+#ifdef REGISTER_TIMES
+    std::chrono::steady_clock::time_point time_StartExtORB = std::chrono::steady_clock::now();
+#endif
+    ExtractORB(0,imFisheye,0,0);
+    // ExtractORB(0,imFisheye,static_cast<KannalaBrandt8*>(mpCamera)->mvLappingArea[0],static_cast<KannalaBrandt8*>(mpCamera)->mvLappingArea[1]);
+#ifdef REGISTER_TIMES
+    std::chrono::steady_clock::time_point time_EndExtORB = std::chrono::steady_clock::now();
+
+    mTimeORB_Ext = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndExtORB - time_StartExtORB).count();
+#endif
+
+    N = mvKeys.size();
+
+    if(mvKeys.empty())
+        return;
+
+    std::vector<cv::Point2f> unkpts;     // undistorted key points
+    std::vector<cv::Point3f> unkpts_hn;  // key points in homogeneous normalized plane
+    {
+        unkpts.reserve(N);
+        unkpts_hn.reserve(N);
+        for(int i=0; i<N; i++) {
+            cv::Point2f pt = mvKeys[i].pt;
+            cv::Point3f unpt_hn = mpCamera->unproject(pt);
+            unkpts_hn.push_back(unpt_hn);
+        }
+        
+        cv::Mat rvec = cv::Mat::zeros(3, 1, cv::DataType<double>::type);
+        cv::Mat tvec = cv::Mat::zeros(3, 1, cv::DataType<double>::type);
+        cv::Mat distCoeffs = cv::Mat::zeros(4,1,cv::DataType<double>::type);
+        cv::projectPoints(unkpts_hn, rvec, tvec, pCamera->toK(), distCoeffs, unkpts);
+        
+        mvKeysUn.resize(N);
+        for(int i=0; i<N; i++) {
+            cv::KeyPoint kp = mvKeys[i];
+            kp.pt = unkpts[i];
+            mvKeysUn[i] = kp;
+        }
+    }
+
+    // project to IR image from Fisheye image
+    std::vector<cv::Point2f> unpts_ir;
+    unpts_ir.reserve(N);
+    std::vector<int> vidx;
+    vidx.reserve(N);
+    {
+        float fx = static_cast<Pinhole*>(mpCamera2)->toK().at<float>(0,0);
+        float fy = static_cast<Pinhole*>(mpCamera2)->toK().at<float>(1,1);
+        float cx = static_cast<Pinhole*>(mpCamera2)->toK().at<float>(0,2);
+        float cy = static_cast<Pinhole*>(mpCamera2)->toK().at<float>(1,2);
+
+        int w = imDepth.cols;
+        int h = imDepth.rows;
+
+        for(int i=0; i<N; i++) {
+            Eigen::Vector3f unpt0(unkpts_hn[i].x, unkpts_hn[i].y, unkpts_hn[i].z);
+            Eigen::Vector3f unpt1 = mTlr * unpt0;
+            Eigen::Vector2f hnpt1 = unpt1.hnormalized();
+            Eigen::Vector2f pt1 = Eigen::Vector2f(hnpt1.x() * fx + cx, hnpt1.y() * fy + cy);
+            if(pt1.x() > 0 && pt1.x() < w && pt1.y() > 0 && pt1.y() < h) {
+                unpts_ir.push_back(cv::Point2f(pt1.x(), pt1.y()));
+                vidx.push_back(i);
+                // cv::KeyPoint kp1 = mvKeys[i];
+                // kp1.pt = unkpts[i];
+                // mvKeysUn.push_back(kp1);
+            }
+        }
+    }
+
+    // ComputeStereoFromRGBD(imDepth);
+    {
+        mvuRight = vector<float>(N,-1);
+        mvDepth = vector<float>(N,-1);
+    
+        int nr = 0;
+        for(int k=0; k<vidx.size(); k++)
+        {
+            int idx = vidx[k];
+
+            const cv::KeyPoint &kpU = mvKeysUn[idx];
+    
+            const float &v = unpts_ir[k].y;
+            const float &u = unpts_ir[k].x;
+    
+            const float d = imDepth.at<float>(v,u);
+            if(d>0)
+            {
+                mvDepth[idx] = d;
+                mvuRight[idx] = kpU.pt.x-mbf/d;
+                nr++;
+            }
+        }
+        std::cout << __FUNCTION__ << " ------------------ N: " << N << ", in depth: " << nr << std::endl;
+    }
+    
+    mvpMapPoints = vector<MapPoint*>(N,static_cast<MapPoint*>(NULL));
+
+    mmProjectPoints.clear();
+    mmMatchedInImage.clear();
+
+    mvbOutlier = vector<bool>(N,false);
+
+    // This is done only for the first Frame (or after a change in the calibration)
+    if(mbInitialComputations)
+    {
+        ComputeImageBounds(imDepth);
+
+        mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/static_cast<float>(mnMaxX-mnMinX);
+        mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/static_cast<float>(mnMaxY-mnMinY);
+
+        fx = K.at<float>(0,0);
+        fy = K.at<float>(1,1);
+        cx = K.at<float>(0,2);
+        cy = K.at<float>(1,2);
+        invfx = 1.0f/fx;
+        invfy = 1.0f/fy;
+
+        mbInitialComputations=false;
+    }
+
+    mb = mbf/fx;
+
+    if(pPrevF){
+        if(pPrevF->HasVelocity())
+            SetVelocity(pPrevF->GetVelocity());
+    }
+    else{
+        mVw.setZero();
+    }
+
+    mpMutexImu = new std::mutex();
+
+    //Set no stereo fisheye information
+    Nleft = -1;
+    Nright = -1;
+    mvLeftToRightMatch = vector<int>(0);
+    mvRightToLeftMatch = vector<int>(0);
+    mvStereo3Dpoints = vector<Eigen::Vector3f>(0);
+    monoLeft = -1;
+    monoRight = -1;
+
+    AssignFeaturesToGrid();
+
+    // debug
+    {
+        cv::Mat img_show;
+        cv::cvtColor(imFisheye, img_show, cv::COLOR_GRAY2BGR);
+
+        std::vector<cv::Point2f> unpts;
+        unpts.resize(N);
+        for(int i=0; i<N; i++) unpts[i] = mvKeysUn[i].pt;
+
+        img_draw(img_show, unpts);
+
+
+        cv::Mat mat_depth8;
+        {
+            double min, max;
+            cv::minMaxLoc(imDepth, &min, &max);
+            imDepth.convertTo(mat_depth8, CV_8UC1, 255.0/(max-min), -255.0*min/(max-min));
+        }
+        cv::imshow("depth", mat_depth8);
+        cv::imshow("unpts", img_show);
+        cv::waitKey(100);
+    }
+}
 
 Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, GeometricCamera* pCamera, cv::Mat &distCoef, const float &bf, const float &thDepth, Frame* pPrevF, const IMU::Calib &ImuCalib)
     :mpcpi(NULL),mpORBvocabulary(voc),mpORBextractorLeft(extractor),mpORBextractorRight(static_cast<ORBextractor*>(NULL)),
