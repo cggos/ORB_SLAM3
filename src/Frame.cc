@@ -347,17 +347,30 @@ Frame::Frame(const cv::Mat &imFisheye, const cv::Mat &imDepth, const double &tim
             unkpts_hn.push_back(unpt_hn);
         }
         
+        mvKeysUn.resize(N);
         cv::Mat rvec = cv::Mat::zeros(3, 1, cv::DataType<double>::type);
         cv::Mat tvec = cv::Mat::zeros(3, 1, cv::DataType<double>::type);
         cv::Mat distCoeffs = cv::Mat::zeros(4,1,cv::DataType<double>::type);
         cv::projectPoints(unkpts_hn, rvec, tvec, pCamera->toK(), distCoeffs, unkpts);
-        
-        mvKeysUn.resize(N);
         for(int i=0; i<N; i++) {
             cv::KeyPoint kp = mvKeys[i];
             kp.pt = unkpts[i];
             mvKeysUn[i] = kp;
         }
+
+        // //Correct FishEye distortion
+        // mvKeysUn.resize(N);
+        // std::vector<cv::Point2f> vPts1(mvKeys.size());
+        // for(size_t i = 0; i < mvKeys.size(); i++) vPts1[i] = mvKeys[i].pt;
+        // cv::Mat D = (cv::Mat_<float>(4,1) << 
+        //     pCamera->getParameter(4), 
+        //     pCamera->getParameter(5), 
+        //     pCamera->getParameter(6), 
+        //     pCamera->getParameter(7));
+        // cv::Mat R = cv::Mat::eye(3,3,CV_32F);
+        // cv::Mat K = pCamera->toK();
+        // cv::fisheye::undistortPoints(vPts1,vPts1,K,D,R,K);
+        // for(size_t i = 0; i < mvKeys.size(); i++) mvKeysUn[i].pt = vPts1[i];
     }
 
     // project to IR image from Fisheye image
@@ -382,9 +395,6 @@ Frame::Frame(const cv::Mat &imFisheye, const cv::Mat &imDepth, const double &tim
             if(pt1.x() > 0 && pt1.x() < w && pt1.y() > 0 && pt1.y() < h) {
                 unpts_ir.push_back(cv::Point2f(pt1.x(), pt1.y()));
                 vidx.push_back(i);
-                // cv::KeyPoint kp1 = mvKeys[i];
-                // kp1.pt = unkpts[i];
-                // mvKeysUn.push_back(kp1);
             }
         }
     }
@@ -470,7 +480,7 @@ Frame::Frame(const cv::Mat &imFisheye, const cv::Mat &imDepth, const double &tim
 
         std::vector<cv::Point2f> unpts;
         unpts.resize(N);
-        for(int i=0; i<N; i++) unpts[i] = mvKeysUn[i].pt;
+        for(int i=0; i<N; i++) unpts[i] = mvKeys[i].pt;
 
         img_draw(img_show, unpts);
 
