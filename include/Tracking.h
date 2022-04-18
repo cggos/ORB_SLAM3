@@ -140,6 +140,8 @@ public:
 
     cv::Mat mImGray;
 
+    cv::Mat mask_ = cv::Mat();
+
     // Initialization Variables (Monocular)
     std::vector<int> mvIniLastMatches;
     std::vector<int> mvIniMatches;

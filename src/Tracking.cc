@@ -578,6 +578,10 @@ void Tracking::newParameterLoader(Settings *settings) {
 
     if(mSensor == System::FisheyeD) {
         mpFrameDrawer->both = false;
+
+        std::string str_mask = "/home/cg/Pictures/mask_fisheye_848_800_r390.png"; 
+        mask_ = cv::imread(str_mask.c_str(), 0);
+        std::cout << "----- [cggos] read mask for fisheye image from " << str_mask << std::endl;
     }
 
     if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD || mSensor == System::FisheyeD){
@@ -1558,7 +1562,7 @@ Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, co
     else if(mSensor == System::IMU_RGBD)
         mCurrentFrame = Frame(mImGray,imDepth,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera,&mLastFrame,*mpImuCalib);
     else if (mSensor == System::FisheyeD) {
-        mCurrentFrame = Frame(mImGray,imDepth,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera, mpCamera2);
+        mCurrentFrame = Frame(mImGray,imDepth,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera, mpCamera2, mask_);
     }
 
 
