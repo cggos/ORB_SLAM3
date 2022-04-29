@@ -476,6 +476,7 @@ Frame::Frame(const cv::Mat &imFisheye, const cv::Mat &imDepth, const double &tim
     AssignFeaturesToGrid();
 
     // debug
+#if 0
     {
         cv::Mat img_show;
         cv::cvtColor(imFisheye, img_show, cv::COLOR_GRAY2BGR);
@@ -485,7 +486,6 @@ Frame::Frame(const cv::Mat &imFisheye, const cv::Mat &imDepth, const double &tim
         for(int i=0; i<N; i++) unpts[i] = mvKeys[i].pt;
 
         img_draw(img_show, unpts);
-
 
         cv::Mat mat_depth8;
         {
@@ -497,6 +497,7 @@ Frame::Frame(const cv::Mat &imFisheye, const cv::Mat &imDepth, const double &tim
         cv::imshow("unpts", img_show);
         cv::waitKey(100);
     }
+#endif
 }
 
 Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, GeometricCamera* pCamera, cv::Mat &distCoef, const float &bf, const float &thDepth, Frame* pPrevF, const IMU::Calib &ImuCalib)

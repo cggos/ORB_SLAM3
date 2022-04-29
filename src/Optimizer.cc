@@ -992,6 +992,8 @@ int Optimizer::PoseOptimization(Frame *pFrame)
         }
     }
     }
+    
+    std::cout << __FUNCTION__ << ", " << __LINE__ << ": vpEdgesMono " << vpEdgesMono.size() << ", vpEdgesStereo " << vpEdgesStereo.size() << std::endl;
 
     if(nInitialCorrespondences<3)
         return 0;
@@ -1109,6 +1111,8 @@ int Optimizer::PoseOptimization(Frame *pFrame)
     Sophus::SE3<float> pose(SE3quat_recov.rotation().cast<float>(),
             SE3quat_recov.translation().cast<float>());
     pFrame->SetPose(pose);
+    
+    std::cout << __FUNCTION__ << ", " << __LINE__ << ": ret " << nInitialCorrespondences - nBad << std::endl;
 
     return nInitialCorrespondences-nBad;
 }

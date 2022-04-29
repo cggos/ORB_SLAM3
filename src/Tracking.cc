@@ -2931,6 +2931,8 @@ bool Tracking::TrackWithMotionModel()
         th=15;
 
     int nmatches = matcher.SearchByProjection(mCurrentFrame,mLastFrame,th,mSensor==System::MONOCULAR || mSensor==System::IMU_MONOCULAR);
+        
+    std::cout << __FUNCTION__ << ": namtches: " << nmatches << std::endl;
 
     // If few matches, uses a wider window search
     if(nmatches<20)

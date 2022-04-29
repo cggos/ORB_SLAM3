@@ -387,6 +387,8 @@ void LocalMapping::MapPointCulling()
 
 void LocalMapping::CreateNewMapPoints()
 {
+    std::cout << __FUNCTION__ << ": ===========================" << std::endl;
+
     // Retrieve neighbor keyframes in covisibility graph
     int nn = 10;
     // For stereo inertial case
@@ -480,30 +482,42 @@ void LocalMapping::CreateNewMapPoints()
 
         // Triangulate each match
         const int nmatches = vMatchedIndices.size();
+
+        std::cout << __FUNCTION__ << ": namtches: " << nmatches << std::endl;
+
         for(int ikp=0; ikp<nmatches; ikp++)
         {
             const int &idx1 = vMatchedIndices[ikp].first;
             const int &idx2 = vMatchedIndices[ikp].second;
 
-            const cv::KeyPoint &kp1 = (mpCurrentKeyFrame -> NLeft == -1) ? mpCurrentKeyFrame->mvKeysUn[idx1]
+            cv::KeyPoint kp1 = (mpCurrentKeyFrame -> NLeft == -1) ? mpCurrentKeyFrame->mvKeysUn[idx1]
                                                                          : (idx1 < mpCurrentKeyFrame -> NLeft) ? mpCurrentKeyFrame -> mvKeys[idx1]
                                                                                                                : mpCurrentKeyFrame -> mvKeysRight[idx1 - mpCurrentKeyFrame -> NLeft];
+
             const float kp1_ur=mpCurrentKeyFrame->mvuRight[idx1];
             bool bStereo1 = (!mpCurrentKeyFrame->mpCamera2 && kp1_ur>=0);
-            const bool bRight1 = (mpCurrentKeyFrame -> NLeft == -1 || idx1 < mpCurrentKeyFrame -> NLeft) ? false
+            bool bRight1 = (mpCurrentKeyFrame -> NLeft == -1 || idx1 < mpCurrentKeyFrame -> NLeft) ? false
                                                                                                          : true;
 
-            const cv::KeyPoint &kp2 = (pKF2 -> NLeft == -1) ? pKF2->mvKeysUn[idx2]
+            cv::KeyPoint kp2 = (pKF2 -> NLeft == -1) ? pKF2->mvKeysUn[idx2]
                                                             : (idx2 < pKF2 -> NLeft) ? pKF2 -> mvKeys[idx2]
                                                                                      : pKF2 -> mvKeysRight[idx2 - pKF2 -> NLeft];
 
             const float kp2_ur = pKF2->mvuRight[idx2];
             bool bStereo2 = (!pKF2->mpCamera2 && kp2_ur>=0);
-            const bool bRight2 = (pKF2 -> NLeft == -1 || idx2 < pKF2 -> NLeft) ? false
+            bool bRight2 = (pKF2 -> NLeft == -1 || idx2 < pKF2 -> NLeft) ? false
                                                                                : true;
+            if(System::FisheyeD) {
+                kp1 = mpCurrentKeyFrame->mvKeys[idx1];
+                kp2 = pKF2->mvKeys[idx2];
+
+                bRight1 = false;
+                bRight2 = false;
+            }
 
             if(mpCurrentKeyFrame->mpCamera2 && pKF2->mpCamera2){
                 if(bRight1 && bRight2){
+        std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
                     sophTcw1 = mpCurrentKeyFrame->GetRightPose();
                     Ow1 = mpCurrentKeyFrame->GetRightCameraCenter();
 
@@ -514,6 +528,7 @@ void LocalMapping::CreateNewMapPoints()
                     pCamera2 = pKF2->mpCamera2;
                 }
                 else if(bRight1 && !bRight2){
+        std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
                     sophTcw1 = mpCurrentKeyFrame->GetRightPose();
                     Ow1 = mpCurrentKeyFrame->GetRightCameraCenter();
 
@@ -524,6 +539,7 @@ void LocalMapping::CreateNewMapPoints()
                     pCamera2 = pKF2->mpCamera;
                 }
                 else if(!bRight1 && bRight2){
+        std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
                     sophTcw1 = mpCurrentKeyFrame->GetPose();
                     Ow1 = mpCurrentKeyFrame->GetCameraCenter();
 
@@ -534,6 +550,7 @@ void LocalMapping::CreateNewMapPoints()
                     pCamera2 = pKF2->mpCamera2;
                 }
                 else{
+        std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
                     sophTcw1 = mpCurrentKeyFrame->GetPose();
                     Ow1 = mpCurrentKeyFrame->GetCameraCenter();
 
@@ -553,6 +570,7 @@ void LocalMapping::CreateNewMapPoints()
                 Rwc2 = Rcw2.transpose();
                 tcw2 = sophTcw2.translation();
             }
+        std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
 
             // Check parallax between rays
             Eigen::Vector3f xn1 = pCamera1->unprojectEig(kp1.pt);
@@ -582,18 +600,21 @@ void LocalMapping::CreateNewMapPoints()
             if(cosParallaxRays<cosParallaxStereo && cosParallaxRays>0 && (bStereo1 || bStereo2 ||
                                                                           (cosParallaxRays<0.9996 && mbInertial) || (cosParallaxRays<0.9998 && !mbInertial)))
             {
+        std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
                 goodProj = GeometricTools::Triangulate(xn1, xn2, eigTcw1, eigTcw2, x3D);
                 if(!goodProj)
                     continue;
             }
             else if(bStereo1 && cosParallaxStereo1<cosParallaxStereo2)
             {
+        std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
                 countStereoAttempt++;
                 bPointStereo = true;
                 goodProj = mpCurrentKeyFrame->UnprojectStereo(idx1, x3D);
             }
             else if(bStereo2 && cosParallaxStereo2<cosParallaxStereo1)
             {
+        std::cout << __FUNCTION__ << ", " << __LINE__ << std::endl;
                 countStereoAttempt++;
                 bPointStereo = true;
                 goodProj = pKF2->UnprojectStereo(idx2, x3D);
