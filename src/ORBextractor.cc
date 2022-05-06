@@ -825,7 +825,7 @@ namespace ORB_SLAM3
                     vector<cv::KeyPoint> vKeysCell;
             
                     cv::Ptr<cv::FastFeatureDetector> fd;
-                    if(use_mask_)
+                    if(!use_mask_)
                         FAST(mvImagePyramid[level].rowRange(iniY,maxY).colRange(iniX,maxX), vKeysCell,iniThFAST,true);
                     else {
                         fd = cv::FastFeatureDetector::create(iniThFAST, true);
@@ -849,7 +849,7 @@ namespace ORB_SLAM3
 
                     if(vKeysCell.empty())
                     {
-                        if(use_mask_)
+                        if(!use_mask_)
                             FAST(mvImagePyramid[level].rowRange(iniY,maxY).colRange(iniX,maxX), vKeysCell,minThFAST,true);
                         else {
                             fd = cv::FastFeatureDetector::create(minThFAST, true);

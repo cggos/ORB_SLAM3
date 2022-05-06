@@ -36,3 +36,8 @@ rosbag play cafe1-1.bag /d400/color/image_raw:=/camera/rgb/image_raw /d400/align
 # Fisheye-Depth
 
 rosrun --prefix 'gdb --args' ORB_SLAM3 FisheyeDepth Vocabulary/ORBvoc.txt Examples_old/RGB-D-Inertial/RealSense_T265_D435i.yaml
+
+
+rosrun ORB_SLAM3 RGBD Vocabulary/ORBvoc.txt Examples_old/RGB-D/RealSense_D435i.yaml
+
+rosbag play d435i-t265-20220407.bag /D435I/color/image_raw:=/camera/rgb/image_raw /D435I/depth/image_rect_raw:=/camera/depth_registered/image_raw
