@@ -30,8 +30,8 @@
 namespace ORB_SLAM3
 {
 
-LocalMapping::LocalMapping(System* pSys, Atlas *pAtlas, const float bMonocular, bool bInertial, const string &_strSeqName):
-    mpSystem(pSys), mbMonocular(bMonocular), mbInertial(bInertial), mbResetRequested(false), mbResetRequestedActiveMap(false), mbFinishRequested(false), mbFinished(true), mpAtlas(pAtlas), bInitializing(false),
+LocalMapping::LocalMapping(System* pSys, Atlas *pAtlas, const float bMonocular, bool bInertial, bool bFisheyeD, const string &_strSeqName):
+    mpSystem(pSys), mbMonocular(bMonocular), mbInertial(bInertial), mbFisheyeD(bFisheyeD), mbResetRequested(false), mbResetRequestedActiveMap(false), mbFinishRequested(false), mbFinished(true), mpAtlas(pAtlas), bInitializing(false),
     mbAbortBA(false), mbStopped(false), mbStopRequested(false), mbNotStop(false), mbAcceptKeyFrames(true),
     mIdxInit(0), mScale(1.0), mInitSect(0), mbNotBA1(true), mbNotBA2(true), mIdxIteration(0), infoInertial(Eigen::MatrixXd::Zero(9,9))
 {
@@ -507,7 +507,7 @@ void LocalMapping::CreateNewMapPoints()
             bool bStereo2 = (!pKF2->mpCamera2 && kp2_ur>=0);
             bool bRight2 = (pKF2 -> NLeft == -1 || idx2 < pKF2 -> NLeft) ? false
                                                                                : true;
-            if(System::FisheyeD) {
+            if(mbFisheyeD) {
                 kp1 = mpCurrentKeyFrame->mvKeys[idx1];
                 kp2 = pKF2->mvKeys[idx2];
 
